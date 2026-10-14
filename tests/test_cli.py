@@ -55,6 +55,17 @@ class TestBuildParser(unittest.TestCase):
         ns = parser.parse_args([])
         self.assertFalse(ns.json)
         self.assertIsNone(ns.field)
+        self.assertFalse(ns.no_osd)
+
+    def test_no_osd_flag(self):
+        parser = build_parser()
+        ns = parser.parse_args(["--no-osd"])
+        self.assertTrue(ns.no_osd)
+
+    def test_no_osd_falls_through_to_gui(self):
+        # --no-osd is a GUI option, not a CLI action: run_cli must hand back
+        # to main() (-1) so the collector actually starts.
+        self.assertEqual(run_cli(["--no-osd"]), -1)
 
 
 class TestRunCli(unittest.TestCase):

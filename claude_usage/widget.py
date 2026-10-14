@@ -1028,9 +1028,12 @@ class ClaudeUsageApp(QObject):
     # emits, Qt queue-delivers to the GUI thread, which owns _latest_tag.
     update_available = Signal(str)
 
-    def __init__(self, config: dict[str, Any]) -> None:
+    def __init__(self, config: dict[str, Any], show_osd: bool = True) -> None:
         super().__init__()
         self.config = config
+        # False under --no-osd: another front end (the macOS menu bar app)
+        # shows the numbers, so the overlay is never shown.
+        self._show_osd = show_osd
         self.stats = UsageStats()
         self._alive = True
         self._refreshing = False
@@ -1105,20 +1108,11 @@ class ClaudeUsageApp(QObject):
         self.stats_ready.connect(self._apply_stats)
         self.update_available.connect(self._on_update_available)
 
-        # Show the overlay, then restore last-session UI state so the widget
+        # Unless --no-osd, show the overlay and restore last-session UI state so the widget
         # reopens exactly as the user left it (scale is restored in the
         # overlay's own __init__ from osd_scale).
-        self.overlay.show()
-        if config.get("osd_minimized", False):
-            self.overlay.toggle_minimized()
-        if not config.get("osd_visible", True):
-            # Restore "hidden" as MINIMIZED, not fully hidden: the context
-            # menu is only reachable by right-clicking the overlay, so a
-            # truly hidden restore would leave no UI path back — the user
-            # would have to hand-edit config.json. The 6px strip still takes
-            # right-clicks, so recovery is one click away.
-            if not self.overlay._minimized:
-                self.overlay.toggle_minimized()
+        if show_osd:
+            self._restore_overlay(config)
         self._refresh_async()
 
         # Periodic refresh timer (runs on the GUI thread). The poll interval
@@ -1157,6 +1151,20 @@ class ClaudeUsageApp(QObject):
         # failure so an unreachable or rejecting endpoint isn't retried on
         # every single refresh.
         self._weekly_report_retry_after = 0.0
+
+    def _restore_overlay(self, config: dict[str, Any]) -> None:
+        """Show the overlay in the state the user left it."""
+        self.overlay.show()
+        if config.get("osd_minimized", False):
+            self.overlay.toggle_minimized()
+        if not config.get("osd_visible", True):
+            # Restore "hidden" as MINIMIZED, not fully hidden: the context
+            # menu is only reachable by right-clicking the overlay, so a
+            # truly hidden restore would leave no UI path back — the user
+            # would have to hand-edit config.json. The 6px strip still takes
+            # right-clicks, so recovery is one click away.
+            if not self.overlay._minimized:
+                self.overlay.toggle_minimized()
 
     # ----------------------------------------------------------- menu build
 
@@ -1811,11 +1819,14 @@ class ClaudeUsageApp(QObject):
         self._alive = False
         self._timer.stop()
         # Remember whether the OSD was visible so the next launch matches.
-        try:
-            self.config["osd_visible"] = bool(self.overlay.isVisible())
-            self._persist_config()
-        except Exception:
-            pass
+        # Not under --no-osd: the overlay was never shown, and saving that
+        # would hide it for the user's next normal launch.
+        if self._show_osd:
+            try:
+                self.config["osd_visible"] = bool(self.overlay.isVisible())
+                self._persist_config()
+            except Exception:
+                pass
         if self._api_server is not None:
             try:
                 self._api_server.stop()

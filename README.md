@@ -138,6 +138,7 @@ Gauge variants for every theme are available at `screenshots/osd-gauge-<theme>.p
 pip install --user --upgrade claude-usage-widget
 claude-usage              # launches the OSD overlay (foreground)
 claude-usage --detach     # …or run it in the background and free the shell (Linux/macOS; on Windows use Start-Process or pythonw)
+claude-usage --no-osd     # no overlay: collection, notifications, webhooks and the API server only
 claude-usage --version    # 0.13.1
 ```
 
@@ -235,6 +236,29 @@ With this configured the widget uses it two ways:
 - **Rate-limit fallback** — when the endpoint throttles us, a dump younger than 20 minutes beats the last on-disk sample, which can lag a whole rate-limit window behind.
 
 Producing the file is up to your statusline script (it receives the payload from Claude Code on stdin and can `tee` the relevant part out). Expired windows in a stale dump are clamped to zero, and a missing/garbled file just disables the feature for that refresh.
+
+## macOS app: menu bar and Notification Center widget (optional)
+
+`macos/` builds **Claude Usage.app**, a native Mac app with no terminal step:
+
+- **Menu bar item** with your session usage, plus tokens per minute while Claude Code is working. Click it for session, weekly and model limits with reset times, today's cost, tokens and messages, and the week's cost.
+- **Notification Center widget** in small and medium sizes, which can also sit on the desktop. It has a refresh button.
+- **The full claude-usage collector bundled inside**, run with `--no-osd`. Notifications and webhooks work as usual. The menu bar takes the overlay's place: it is always visible, including over full-screen apps, and never covers what you're working on.
+- **Open at login**, a proper icon, and no Dock icon.
+
+The app runs the bundled collector in the background without the overlay and with the localhost API server turned on (`api_server_enabled`). The menu bar and the widget read from it, because a sandboxed widget cannot read Claude Code's Keychain login. If another claude-usage is already serving on that port, the app uses it instead of starting its own.
+
+**Refresh rates.** The collector takes a new reading every `refresh_seconds` (60 by default), the same as the overlay does, and the menu bar shows each one within a few seconds. macOS decides when widgets refresh. The app asks for a widget refresh whenever a limit percentage changes, at most every few minutes, and the widget's refresh button works any time. Reset countdowns tick live in both.
+
+**Building** needs full Xcode with your Apple ID signed in under *Xcode → Settings → Accounts*. The free Personal Team is enough. Then:
+
+```bash
+macos/build.sh
+```
+
+The script bundles the collector with PyInstaller in a private virtualenv under `macos/build/`, builds and signs the app with your team, and installs it to `/Applications`. Set `PYTHON` to choose the interpreter used for bundling. To add the widget, click the date and time in the menu bar, choose *Edit Widgets* and search for *Claude Usage*.
+
+A build signed with a free Personal Team runs on your own Mac. Distributing it to others needs a paid Apple Developer account for Developer ID signing and notarization. The collector's log is at `~/Library/Logs/Claude Usage/collector.log`.
 
 ## Second provider: OpenAI Codex (opt-in)
 

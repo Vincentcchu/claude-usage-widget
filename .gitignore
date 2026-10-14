@@ -12,3 +12,6 @@ _gi_fix/
 dist/
 build/
 *.egg-info/
+
+# Xcode per-user state
+xcuserdata/

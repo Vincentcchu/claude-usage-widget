@@ -67,6 +67,10 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--detach", "-d", action="store_true",
                    help="Run the GUI in the background and return the shell "
                         "prompt; logs go to ~/.cache/claude-usage/widget.log.")
+    p.add_argument("--no-osd", action="store_true",
+                   help="Run without the desktop overlay (collector, "
+                        "notifications and API server only), e.g. behind "
+                        "another front end such as the macOS app.")
     return p
 
 
@@ -269,8 +273,12 @@ def _print_qt_install_hint(exc: Exception) -> None:
     )
 
 
-def _launch_gui() -> None:
-    """Launch the PySide6 GUI (cross-platform)."""
+def _launch_gui(show_osd: bool = True) -> None:
+    """Launch the PySide6 GUI (cross-platform).
+
+    With ``show_osd=False`` the overlay is never shown: everything else
+    (collection, notifications, webhooks, the API server) runs as usual.
+    """
     import signal
 
     signal.signal(signal.SIGINT, signal.SIG_DFL)
@@ -312,7 +320,7 @@ def _launch_gui() -> None:
     app.setQuitOnLastWindowClosed(False)
 
     config = load_config(_default_config_path())
-    _controller = ClaudeUsageApp(config)  # keep a reference
+    _controller = ClaudeUsageApp(config, show_osd=show_osd)  # keep a reference
     _ = _controller  # suppress unused-var warnings; QApplication holds ownership
     sys.exit(app.exec())
 
@@ -334,7 +342,7 @@ def main() -> int:
     if args.detach and not (args.version or args.json or args.once or
                             args.field or args.export or args.statusline):
         _detach_into_background()
-        _launch_gui()
+        _launch_gui(show_osd=not args.no_osd)
         return 0
 
     rc = run_cli(sys.argv[1:])
@@ -342,7 +350,7 @@ def main() -> int:
         return rc
 
     # No CLI flag — fall through to the GUI in the foreground.
-    _launch_gui()
+    _launch_gui(show_osd=not args.no_osd)
     return 0
 
 
